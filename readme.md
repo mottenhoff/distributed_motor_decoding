@@ -1,6 +1,6 @@
 # Executed and imagined grasping movements can be decoded from lower dimensional representation of distributed non-motor brain areas.
 
-Code used to generate the results of the manuscript (link will follow).
+Code used to generate the results of the manuscript can be found at https://osf.io/xw386.
 
 ## Installation
 
