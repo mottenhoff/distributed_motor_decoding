@@ -1,4 +1,7 @@
-__pychache__
+__pycache__
+
 results/*
 figures/*
 data/*
+
+nohup.out

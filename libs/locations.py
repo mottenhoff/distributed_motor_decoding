@@ -3,6 +3,15 @@ import sys
 import loader
 import pandas as pd
 
+def load_csv(path):
+    data= {}
+    
+    df = pd.read_csv(path)
+    data[path.parent.name] = dict(zip(df['electrode_name_1'],
+                                df['location']))
+    data[path.parent.name]['order'] = df['electrode_name_1'].to_list()
+
+    return data
 
 def load_all_electrode_locations(path):
     # TODO: Make khxx selection more robust
@@ -24,8 +33,3 @@ def list_locations(files, to_file=sys.stdout):
         # print('{:<5}: {:<5} contacts | {:<5} Electrodes'\
         #       .format(ppt, len(locs.keys()), -1))
         print(f'{ppt:<4}: {len(locs.keys()):<3}', file=to_file)
-
-if __name__=='__main__':
-    path = r'L:\FHML_MHeNs\sEEG'
-    files = load_all_electrode_locations(path)
-    list_locations(files)

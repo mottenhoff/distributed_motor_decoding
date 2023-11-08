@@ -19,21 +19,27 @@ from scipy import fftpack
 from scipy.stats import mode
 from mne.filter import filter_data
 from mne.filter import notch_filter
+from mne.decoding import CSP
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 from sklearn.pipeline import Pipeline
 from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.metrics import roc_auc_score
+
+
 
 # LOCAL
 path = r'./libs'
 sys.path.insert(0, path)
 from data_quality.check_quality import QualityChecker
 from loader import get_all_files, load_grasp_seeg
-from locations import load_all_electrode_locations
+from locations import load_all_electrode_locations, load_csv
 import central_locations_list as cll
 
 from plotting import plot_pca, print_results
 
+DECODE_CSP_LDA = True
 
 def print_experiment_metrics(ppts, locations):
     n_ppts = len(set([ppt[0].parts[1] for ppt in ppts]))
@@ -201,6 +207,7 @@ def get_train_test(x, y, fold, folds, continuous=False):
     return train_x, train_y.ravel(), test_x, test_y.ravel()
 
 def get_classifier():
+    
     return make_pipeline(
                 pyriemann.estimation.Covariances(estimator='lwf'),
                 pyriemann.classification.MDM(metric='kullback_sym')
@@ -234,6 +241,26 @@ def run_pipeline(train_x, train_y, test_x, n_components):
     
     return pca, clf, train_y_hat, test_y_hat
 
+def run_pipeline_csp_lda(train_x, train_y, test_x, n_components):
+
+    unsplit = lambda arr: np.vstack(arr.transpose(0, 2, 1))
+    split = lambda arr, dim_size: np.array(np.vsplit(arr, dim_size)).transpose(0, 2, 1)
+
+    dim_trials_train, dim_trials_test = train_x.shape[0], test_x.shape[0]
+
+    csp  = CSP(n_components=n_components, reg='ledoit_wolf')
+    csp.fit(train_x, train_y)
+
+    train_x_csp, test_x_csp = csp.transform(train_x), csp.transform(test_x)
+
+    lda = LinearDiscriminantAnalysis()
+    lda.fit(train_x_csp, train_y)
+    
+    train_y_hat = lda.predict_proba(train_x_csp)
+    test_y_hat = lda.predict_proba(test_x_csp)
+    
+    return csp, lda, train_y_hat, test_y_hat
+
 def decode(x, y, n_components):
 
     results = []
@@ -247,19 +274,36 @@ def decode(x, y, n_components):
     for fold in range(folds):
         train_x, train_y, test_x, test_y = get_train_test(x, y, fold, folds)
 
-        pca, clf, train_y_hat, test_y_hat = run_pipeline(train_x, train_y, test_x, n_components)
+        if DECODE_CSP_LDA:
 
-        results.append({
-            "pca": pca,
-            "clf": clf,
-            "train_x": train_x,
-            "train_y": train_y,
-            "test_x": test_x,
-            "test_y": test_y,
-            "train_y_hat": train_y_hat, 
-            "test_y_hat": test_y_hat,
-            })
-        print('.', end='', flush=True)
+            csp, lda, train_y_hat, test_y_hat = run_pipeline_csp_lda(train_x, train_y, test_x, n_components)
+            print(f'{fold} | Train: {roc_auc_score(train_y, train_y_hat[:, 1]):5.2f} | Test: {roc_auc_score(test_y, test_y_hat[:, 1]):5.2f}')
+            
+            results.append({
+                "pca": csp, # Keeping the name the same for simplicity. Key should be csp 
+                "clf": lda,
+                "train_x": train_x,
+                "train_y": train_y,
+                "test_x": test_x,
+                "test_y": test_y,
+                "train_y_hat": train_y_hat, 
+                "test_y_hat": test_y_hat,
+                })
+        else:
+
+            pca, clf, train_y_hat, test_y_hat = run_pipeline(train_x, train_y, test_x, n_components)
+
+            results.append({
+                "pca": pca,
+                "clf": clf,
+                "train_x": train_x,
+                "train_y": train_y,
+                "test_x": test_x,
+                "test_y": test_y,
+                "train_y_hat": train_y_hat, 
+                "test_y_hat": test_y_hat,
+                })
+            print('.', end='', flush=True)
 
     params += [{'principle_components': n_components}]
 
@@ -274,83 +318,81 @@ def explore(seeg, ppt_id, session_id, name=''):
 def evaluate(results, ppt_id, session_id, params, name):
     tmp = print_results(results, ppt_id, session_id, params, name)
 
-def run():
-    n_components = [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
-    exps = ['grasp', 'imagine']
-    bands = [['beta'], ['high_gamma'], ['beta', 'high_gamma']]
 
+def run(ppt, exp, band):
+    n_components = [3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
     remove_motor_locs = True
     session_id = 0
-
-    for combination in product(exps, bands):
-        exp, band = combination
-        name = f"{exp}_{''.join(band)}"
-
-        path_save = Path(f"./results/{name}")
-        path_save.mkdir(parents=True, exist_ok=True)
-        
-        path = r'./data'
-        ppts = get_all_files(path, 'xdf', keywords=[exp])
-        locations = load_all_electrode_locations(path)
-        
-        print_experiment_metrics(ppts, locations)
-        
-        for ppt in ppts:
-            results = {}
-            params = {}
-
-            ppt_id = ppt[0].parts[1]
-
-            # Load data
-            seeg = load_grasp_seeg(ppt[0])
-            seeg['locations'] = locations.get(ppt_id, None)
-
-            original_chs = seeg['channel_names']
-
-            if remove_motor_locs:
-                removed_locs, seeg = remove_locations(seeg)
+    ppt_id = ppt
 
 
-            flagged_noise, seeg = clean_data(seeg)
-            if flagged_noise == 'invalid':
-                print('{} has invalid data! Skipping...'.format(ppt_id))
-                continue
+    data_path = Path('./data')
+    filename = data_path/f'{ppt}'/f'{"execute" if exp == "grasp" else "imagine"}.xdf'
 
-            flagged = np.union1d(removed_locs, flagged_noise).astype(int)
-            removed_chs_name = np.array(seeg['channel_names'])[flagged]
-            removed_chs_idc = flagged
-
-            seeg['eeg'] = np.delete(seeg['eeg'], flagged, axis=1)
-            seeg['channel_names'] = np.delete(seeg['channel_names'], flagged)
-
-            seeg['eeg'], params_pp = preprocess(seeg['eeg'], seeg['fs'], band)
-            params.update({'n_channels': seeg['eeg'].shape[1],
-                           'bands': params_pp})
-
-            seeg['eeg'], seeg['trial_labels'] = split_per_trial(seeg['eeg'], seeg['trial_labels'])
-
-            # Only train for move vs rest
-            seeg['trial_labels'] = np.where(seeg['trial_labels']=='0', 0, 1)
-
-            for components in n_components:
-                if seeg['eeg'].shape[2] < components:
-                    continue
-
-                results, learner_params = decode(seeg['eeg'], seeg['trial_labels'], n_components=components)
-
-                params.update({'learner': learner_params})
-                evaluate(results, ppt_id, session_id, params, name)
-                print('')
-                plt.close('all')
+    name = f"{exp}_{''.join(band)}"
+    path_save = Path(f"./results/{name}")
+    path_save.mkdir(parents=True, exist_ok=True)
 
 
-            data = {
-                'original_chs': original_chs,
-                'removed_chs_name': removed_chs_name,
-                'removed_chs_idc': removed_chs_idc }
+    # print_experiment_metrics(ppts, locations)
+    results = {}
+    params = {}
 
-            with open(f'{path_save}/data_{ppt_id}_{exp}_{"_".join(band)}.pkl', 'wb') as f:
-                pickle.dump(data, f)
+    # Load data
+    seeg = load_grasp_seeg(filename)
+    seeg['locations'] = load_csv(data_path/f'{ppt}'/'electrode_locations.csv')
+    original_chs = seeg['channel_names']
+
+    # Remove locations around the central sulcus
+    if remove_motor_locs:
+        removed_locs, seeg = remove_locations(seeg)
+    else:
+        removed_locs = np.empty(0)
+
+    # Check channels for noise
+    flagged_noise, seeg = clean_data(seeg)
+    if type(flagged_noise)==str and flagged_noise == 'invalid':
+        print('{} has invalid data! Skipping...'.format(ppt_id))
+        return
+
+    # Remove the channels with excessive noise
+    flagged = np.union1d(removed_locs, flagged_noise).astype(int)
+    removed_chs_name = np.array(seeg['channel_names'])[flagged]
+    removed_chs_idc = flagged
+
+    seeg['eeg'] = np.delete(seeg['eeg'], flagged, axis=1)
+    seeg['channel_names'] = np.delete(seeg['channel_names'], flagged)
+
+    # Preprocess the data, including filter + hilbert for beta, high-gamma and both
+    seeg['eeg'], params_pp = preprocess(seeg['eeg'], seeg['fs'], band)
+    params.update({'n_channels': seeg['eeg'].shape[1],
+                    'bands': params_pp})
+
+    # Split into trials
+    seeg['eeg'], seeg['trial_labels'] = split_per_trial(seeg['eeg'], seeg['trial_labels'])
+
+    # Only train for move vs rest
+    seeg['trial_labels'] = np.where(seeg['trial_labels']=='0', 0, 1)
+
+    # Train and evaluate decoder for each number of component
+    for components in n_components:
+        if seeg['eeg'].shape[2] < components:
+            continue
+
+        results, learner_params = decode(seeg['eeg'], seeg['trial_labels'], n_components=components)
+
+        params.update({'learner': learner_params})
+        # evaluate(results, ppt_id, session_id, params, name)
+        print('')
+        plt.close('all')
+
+    data = {
+        'original_chs': original_chs,
+        'removed_chs_name': removed_chs_name,
+        'removed_chs_idc': removed_chs_idc }
+
+    with open(f'{path_save}/data_{ppt_id}_{exp}_{"_".join(band)}.pkl', 'wb') as f:
+        pickle.dump(data, f)
 
 
 if __name__ == '__main__':
