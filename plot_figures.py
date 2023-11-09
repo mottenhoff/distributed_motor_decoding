@@ -164,7 +164,7 @@ def line_plot(data, name, ax=None, fig=None):
            
     return fig, ax, means
 
-def line_results(path):
+def line_results(path_results):
 
     translate = {'grasp_beta': {'name': ['Exec', 'Beta'],
                                 'idx': [0, 0]},
@@ -179,22 +179,20 @@ def line_results(path):
                  'imagine_high_gamma': {'name': ['Imag', 'High Gamma'],
                                         'idx': [1, 1]}}
 
-    path_save = Path(r'./figures/')
+    path_save = Path(f'./figures/{path_results.name}')
     path_save.mkdir(parents=True, exist_ok=True)
 
-    path_results = Path(r'./results/')
     paths = [path_results/name for name in translate]
-
-    # paths = [p for p in path.glob('results/**') if p.is_dir()]
     
     nrows = 2
     ncols = 3
     fig, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(14, 8), dpi=300)
     means = []
     for i, path in enumerate(paths):
-        # print(list(translate.keys())[i])
+
         if path.name not in translate:
             continue
+
         results = retrieve_results(path)
 
         idx = translate[path.name]['idx']
@@ -221,8 +219,13 @@ def line_results(path):
     # axs[0, -1].legend(frameon=False, bbox_to_anchor=(1, 1.05))
 
     for i in range(ncols):
-        axs[1, i].set_xlabel('Common spatial patterns', fontsize=FONTSIZE-9)
-        # axs[1, i].set_xlabel('Principal components', fontsize=FONTSIZE-9)
+        
+        if path_results.name == 'csp':
+            axs[1, i].set_xlabel('Common spatial patterns', fontsize=FONTSIZE-9)
+        else:
+            axs[1, i].set_xlabel('Principal components', fontsize=FONTSIZE-9)
+
+
     for i in range(nrows):
         axs[i, 0].set_ylabel('Area under the curve', fontsize=FONTSIZE-9)
 
@@ -230,9 +233,13 @@ def line_results(path):
     fig.savefig(path_save/'main_results.png')
     return fig, axs
 
+def run():
+    # path_results = Path(r"./results/riemann")
+    path_results = Path(r"./results/csp")
+
+    fig, axs = line_results(path_results)
+
+
 if __name__=='__main__':
+    run()
 
-    path = Path(r"")
-    fig, axs = line_results(path)
-
-    path = Path(r"")

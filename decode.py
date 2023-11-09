@@ -243,11 +243,6 @@ def run_pipeline(train_x, train_y, test_x, n_components):
 
 def run_pipeline_csp_lda(train_x, train_y, test_x, n_components):
 
-    unsplit = lambda arr: np.vstack(arr.transpose(0, 2, 1))
-    split = lambda arr, dim_size: np.array(np.vsplit(arr, dim_size)).transpose(0, 2, 1)
-
-    dim_trials_train, dim_trials_test = train_x.shape[0], test_x.shape[0]
-
     csp  = CSP(n_components=n_components, reg='ledoit_wolf')
     csp.fit(train_x, train_y)
 
