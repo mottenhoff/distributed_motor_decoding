@@ -16,7 +16,7 @@ Download [the data](https://osf.io/xw386/) to the cloned repository folder. I us
 
 `conda create --name your_env_name python=3.9`\
 `conda activate your_env_name`\
-`pip install -r requirements.txt`\
+`pip install -r requirements.txt`
 
 ## Running code
 
@@ -27,7 +27,7 @@ run `python main.py`
 To run all files in parallel, set `PARALLEL` in `main.py` to True.\
 `main.py:main()` also contains all the variables used (`exps`, `bands` and `ppts`).\
 To change the included components, change the `n_components` in `decode.py:run()`.\
-To run the CSP analysis, set DECODE_CSP_LDA in `decode.py:42` to `True`.\
+To run the CSP analysis, set DECODE_CSP_LDA in `decode.py:42` to `True`.
 
 #### Plot results
 
