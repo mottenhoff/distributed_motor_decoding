@@ -1,6 +1,6 @@
 # Decoding executed and imagined grasping movements from distributed non-motor brain areas using a Riemannian decoder
 
-Code used in:\
+Code used in:
 > Ottenhoff MC, Verwoert M, Goulis S, Colon AJ, Wagner L, Tousseyn S, van Dijk JP, Kubben PL and Herff C (2023) - Decoding executed and imagined grasping movements from distributed non-motor brain areas using a Riemannian decoder. Front. Neurosci. 17:1283491. doi: 10.3389/fnins.2023.1283491
 
 [Read the paper](https://www.frontiersin.org/articles/10.3389/fnins.2023.1283491/abstract)\
